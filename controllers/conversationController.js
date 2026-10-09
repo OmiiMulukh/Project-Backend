@@ -1,5 +1,20 @@
+
 import Conversation from "../models/Conversation.js";
 import { sendEmail } from "../services/emailService.js";
+
+// Escape user input before inserting it into HTML emails
+const escapeHtml = (value = "") =>
+  String(value).replace(/[&<>"']/g, (char) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+
+    return entities[char];
+  });
 
 // Create new conversation
 export const createConversation = async (req, res) => {
@@ -8,10 +23,11 @@ export const createConversation = async (req, res) => {
 
     if (!name || !email || !subject || !message) {
       return res.status(400).json({
-        message: "Name, email, subject and message are required"
+        message: "Name, email, subject and message are required",
       });
     }
 
+    // Save conversation first
     const conversation = await Conversation.create({
       name,
       email,
@@ -19,51 +35,52 @@ export const createConversation = async (req, res) => {
       messages: [
         {
           sender: "client",
-          message
-        }
-      ]
+          message,
+        },
+      ],
     });
 
-    // Send notification email to BrandNest admin
-    await sendEmail({
-      to: process.env.EMAIL_USER,
-      subject: `New BrandNest Inquiry: ${subject}`,
-      text: `
-New conversation received.
+    // Send email notification separately
+    try {
+      await sendEmail({
+        to: process.env.EMAIL_USER,
+        subject: `New BrandNest Inquiry: ${subject}`,
+        text: `New conversation received.
 
 Name: ${name}
 Email: ${email}
 Subject: ${subject}
 
 Message:
-${message}
-      `,
-      html: `
-        <h2>New BrandNest Inquiry</h2>
+${message}`,
+        html: `
+          <h2>New BrandNest Inquiry</h2>
+          <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+          <p><strong>Subject:</strong> ${escapeHtml(subject)}</p>
+          <h3>Message</h3>
+          <p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>
+        `,
+      });
+    } catch (emailError) {
+      console.error(
+        "Email notification failed:",
+        emailError.message
+      );
+    }
 
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Subject:</strong> ${subject}</p>
-
-        <h3>Message</h3>
-        <p>${message}</p>
-      `
-    });
-
-    res.status(201).json({
+    return res.status(201).json({
       message: "Conversation created successfully",
-      conversation
+      conversation,
     });
-
   } catch (error) {
-    console.error("Create conversation error:", error.message);
+    console.error("Create conversation error:", error);
 
-    res.status(500).json({
-      message: "Server error"
+    return res.status(500).json({
+      message: "Server error",
     });
   }
 };
-
 
 // Get all conversations - Admin
 export const getConversations = async (req, res) => {
@@ -71,20 +88,18 @@ export const getConversations = async (req, res) => {
     const conversations = await Conversation.find()
       .sort({ updatedAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       count: conversations.length,
-      conversations
+      conversations,
     });
-
   } catch (error) {
     console.error("Get conversations error:", error.message);
 
-    res.status(500).json({
-      message: "Server error"
+    return res.status(500).json({
+      message: "Server error",
     });
   }
 };
-
 
 // Get single conversation - Admin
 export const getConversationById = async (req, res) => {
@@ -93,23 +108,21 @@ export const getConversationById = async (req, res) => {
 
     if (!conversation) {
       return res.status(404).json({
-        message: "Conversation not found"
+        message: "Conversation not found",
       });
     }
 
-    res.status(200).json({
-      conversation
+    return res.status(200).json({
+      conversation,
     });
-
   } catch (error) {
     console.error("Get conversation error:", error.message);
 
-    res.status(500).json({
-      message: "Server error"
+    return res.status(500).json({
+      message: "Server error",
     });
   }
 };
-
 
 // Change conversation status
 export const updateConversationStatus = async (req, res) => {
@@ -118,7 +131,7 @@ export const updateConversationStatus = async (req, res) => {
 
     if (!["open", "closed"].includes(status)) {
       return res.status(400).json({
-        message: "Status must be open or closed"
+        message: "Status must be open or closed",
       });
     }
 
@@ -127,26 +140,25 @@ export const updateConversationStatus = async (req, res) => {
       { status },
       {
         new: true,
-        runValidators: true
+        runValidators: true,
       }
     );
 
     if (!conversation) {
       return res.status(404).json({
-        message: "Conversation not found"
+        message: "Conversation not found",
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Conversation status updated",
-      conversation
+      conversation,
     });
-
   } catch (error) {
     console.error("Update status error:", error.message);
 
-    res.status(500).json({
-      message: "Server error"
+    return res.status(500).json({
+      message: "Server error",
     });
   }
 };
